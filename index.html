@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Killer Sudoku Solver</title>
+	<style>
+		body,
+		html {
+			margin: 0;
+		}
+
+		input {
+			box-sizing: border-box;
+			width: 100%;
+			height: 100%;
+			border: 1px solid black;
+			outline: none;
+			text-align: center;
+
+			&:focus {
+				border-color: blue;
+			}
+		}
+
+		input::-webkit-outer-spin-button,
+		input::-webkit-inner-spin-button {
+			-webkit-appearance: none;
+			margin: 0;
+		}
+
+		input[type=number] {
+			-moz-appearance: textfield;
+		}
+
+		.box {
+			position: relative;
+			box-sizing: border-box;
+			border: 2px solid transparent;
+			width: 10vw;
+			max-width: 60px;
+			aspect-ratio: 1;
+			display: inline-block;
+
+			&[data-count]::before {
+				position: absolute;
+				left: 10%;
+				top: 10%;
+				content: attr(data-count);
+				font-size: 10px;
+			}
+		}
+	</style>
+</head>
+
+<body>
+	<script>
+		const colors = {}
+		const groups = {}
+		const inputs = [[], [], [], [], [], [], [], [], []]
+
+		window.addEventListener('keydown', ev => {
+			if (ev.key === 'Shift') {
+				startAddingToGroup(ev.target)
+			}
+		})
+
+		window.addEventListener('keyup', ev => {
+			if (ev.key === 'Shift') {
+				stopAddingToGroup()
+			}
+		})
+
+		let newGroup = ''
+
+		function startAddingToGroup(target = null) {
+			document.getElementById('startGroupBtn').style.display = 'none'
+			document.getElementById('stopGroupBtn').style.display = ''
+
+			newGroup = `g${Math.floor(81 * Math.random() + 1)}`
+
+			for (const group in colors) {
+				if (!groups[group]) {
+					newGroup = group
+					break
+				}
+			}
+
+			if (target instanceof HTMLElement && target.closest('.box')) {
+				addToGroup(target, newGroup)
+			}
+		}
+
+		function stopAddingToGroup() {
+			document.getElementById('startGroupBtn').style.display = ''
+			document.getElementById('stopGroupBtn').style.display = 'none'
+			document.getElementById(`groupControls_${newGroup}`)?.firstElementChild?.focus()
+			newGroup = ''
+		}
+
+		function addToGroup(box, name) {
+			box = box.closest('.box')
+			for (const c of [...box.classList]) {
+				if (c !== name && c !== 'box') {
+					removeFromGroup(box, c)
+				}
+			}
+
+			box.classList.add(name)
+
+			if (!groups[name]) {
+				groups[name] = []
+				const id = `groupControls_${name}`;
+				document.getElementById('groups').insertAdjacentHTML('afterbegin', `<div style="display: inline-flex; gap: 10px; padding: 10px; margin: 5px 5px 0 0; background: ${colors[name]}" id="${id}""><input style="width: 40px" type="number" step="1" value="1" min="1"><button style="box-sizing: border-box; height: 100%; padding: 0 10px;">Remove</button></div>`)
+
+				const controls = document.getElementById(id)
+				controls.firstElementChild.onfocus = ev => ev.target.select()
+				controls.firstElementChild.oninput = ev => {
+					if (!ev.target.valueAsNumber || ev.target.valueAsNumber < 1) {
+						ev.target.valueAsNumber = 1
+					}
+
+					if (Math.floor(ev.target.valueAsNumber) !== ev.target.valueAsNumber) {
+						ev.target.valueAsNumber = Math.floor(ev.target.valueAsNumber)
+					}
+
+					groups[name][0].dataset.count = ev.target.valueAsNumber
+				}
+
+				controls.lastElementChild.onclick = ev => {
+					if (groups[name]) {
+						for (const el of [...groups[name]]) {
+							removeFromGroup(el, name)
+						}
+					}
+				}
+
+				controls.onmouseenter = () => {
+					groups[name]?.forEach(el => el.style.opacity = '0.5')
+				}
+
+				controls.onmouseleave = () => {
+					groups[name]?.forEach(el => el.style.opacity = '')
+				}
+			}
+
+			if (groups[name].indexOf(box) === - 1) {
+				groups[name].push(box)
+			}
+
+			updateCountLabel(name)
+		}
+
+		function removeFromGroup(box, name) {
+			box = box.closest('.box')
+			box.classList.remove(name)
+			const index = groups[name]?.indexOf(box) ?? -1
+			box.style.opacity = ''
+
+			if (index !== -1) {
+				groups[name].splice(index, 1)
+			}
+
+			if (!groups[name]?.length) {
+				delete groups[name]
+				document.getElementById(`groupControls_${name}`)?.remove()
+			}
+
+			updateCountLabel(name)
+		}
+
+		function updateCountLabel(name) {
+			document.querySelectorAll(`.box`).forEach(el => {
+				if (el.classList.length === 1 || el.classList.contains(name)) {
+					delete el.dataset.count
+				}
+			})
+
+			if (!groups[name]) {
+				return
+			}
+
+			groups[name] = [...document.querySelectorAll(`.box.${name}`)]
+			const first = groups[name][0]
+
+			if (first) {
+				first.dataset.count = document.getElementById(`groupControls_${name}`).firstElementChild.valueAsNumber
+			}
+		}
+
+		let style = '';
+		document.body.insertAdjacentHTML('afterbegin', `<br>${'<div class="box"><input step="1" min="1" max="9" type="number"></div>'.repeat(9)}`.repeat(9))
+		style += `.box:nth-of-type(3n + 1) input {border-left-width: 5px}`
+		style += `.box:nth-of-type(3n + 3) input {border-right-width: 5px}`
+
+		for (let i = 1; i <= 9; ++i) {
+			style += `.box:nth-of-type(27n + ${i}) input {border-top-width: 5px}`
+			style += `.box:nth-of-type(27n + ${i + 18}) input {border-bottom-width: 5px}`
+		}
+
+		for (let i = 1; i <= 81; ++i) {
+			const r = 10 * ((i + 1) % 9) + 20 + i
+			const g = 10 * ((i * i + 2) % 8) + 50 - i
+			const b = 10 * ((i * i * i + i) % 7) + 50
+
+			colors[`g${i}`] = `rgb(${r}, ${g}, ${b})`
+
+			style += `.box.g${i} {border: 2px dashed ${colors[`g${i}`]}}`
+			style += `.box.g${i} input {background: ${colors[`g${i}`].replace('rgb', 'rgba').replace(')', ', 0.2)')}}`
+
+			for (let j = 1; j <= 9; ++j) {
+				if (j !== 9) {
+					const selEctor1 = `.box.g${i}:nth-of-type(9n + ${j})+.box.g${i}:nth-of-type(9n + ${j + 1})`;
+					style += `${selEctor1}::before{position: absolute; content:""; background: white; top: 0; bottom: 0; width: 4px; left: -4px;}`
+				}
+
+
+				for (let k = 1; k <= 8; ++k) {
+					const selEctor2 = `br:nth-of-type(${k})${'+.box'.repeat(j - 1)}+.box.g${i}~br:nth-of-type(${k + 1})${'+.box'.repeat(j - 1)}+.box.g${i}`;
+					style += `${selEctor2}::after{position: absolute; content:""; background: white; top: -4px; right: 0; height: 4px; left: 0;}`
+				}
+			}
+		}
+
+		document.querySelectorAll('.box').forEach((el, idx) => {
+			const j = idx % 9
+			const i = (idx - j) / 9
+			inputs[i][j] = el
+			el.firstElementChild.onkeydown = ev => {
+				if (ev.key === 'ArrowRight') {
+					inputs[i][(j + 1) % 9].firstElementChild.focus()
+					ev.preventDefault()
+				}
+
+				if (ev.key === 'ArrowLeft') {
+					inputs[i][(j + 8) % 9].firstElementChild.focus()
+					ev.preventDefault()
+				}
+
+				if (ev.key === 'ArrowUp') {
+					inputs[(i + 8) % 9][j].firstElementChild.focus()
+					ev.preventDefault()
+				}
+
+				if (ev.key === 'ArrowDown') {
+					inputs[(i + 1) % 9][j].firstElementChild.focus()
+					ev.preventDefault()
+				}
+			}
+
+			el.firstElementChild.onfocus = () => {
+				el.firstElementChild.select()
+
+				if (newGroup) {
+					addToGroup(el, newGroup)
+				}
+			}
+
+			el.firstElementChild.oninput = ev => {
+				if (ev.target.value) {
+					const correctValue = Math.round(Math.min(9, Math.max(1, ev.target.value)))
+
+					if (correctValue !== ev.target.valueAsNumber) {
+						ev.target.valueAsNumber = correctValue
+					}
+
+					ev.target.select()
+				}
+			}
+		});
+
+		document.querySelector('style').innerText += style
+
+		function solve() {
+			const bitmaps = [
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+			];
+
+			const sharedGroups = [
+				null, null, null, null, null, null, null, null, null,
+				null, null, null, null, null, null, null, null, null,
+				null, null, null, null, null, null, null, null, null,
+				null, null, null, null, null, null, null, null, null,
+				null, null, null, null, null, null, null, null, null,
+				null, null, null, null, null, null, null, null, null,
+				null, null, null, null, null, null, null, null, null,
+				null, null, null, null, null, null, null, null, null,
+				null, null, null, null, null, null, null, null, null,
+			];
+
+			const cellValues = [
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0,
+			];
+
+			const emptyCellCoordinates = []
+
+			{
+				const groupMap = {}
+
+				for (let i = 0; i < 9; ++i) {
+					for (let j = 0; j < 9; ++j) {
+						const cellIndex = 9 * i + j
+						const rowIndex = i
+						const colIndex = 9 + j
+						const blockIndex = 18 + 3 * Math.floor(i / 3) + Math.floor(j / 3)
+						const cellValue = inputs[i][j].firstElementChild.value ? inputs[i][j].firstElementChild.valueAsNumber : 0
+						const cellMask = cellValue ? (1 << (cellValue - 1)) : 0
+
+						cellValues[cellIndex] = cellValue
+
+						if (bitmaps[rowIndex] & cellMask) {
+							alert(`Duplicate number ${cellValue} in the row ${i + 1}`)
+							return
+						}
+
+						bitmaps[rowIndex] |= cellMask
+
+						if (bitmaps[colIndex] & cellMask) {
+							alert(`Duplicate number ${cellValue} in the column ${j + 1}`)
+							return
+						}
+
+						bitmaps[colIndex] |= cellMask
+
+						if (bitmaps[blockIndex] & cellMask) {
+							alert(`Duplicate number ${cellValue} in the (3 x 3) block [${Math.floor(j / 3) + 1}, ${Math.floor(i / 3) + 1}]`)
+							return
+						}
+
+						bitmaps[blockIndex] |= cellMask
+
+						const groupName = inputs[i][j].className.replaceAll('box', '').replaceAll(' ', '')
+
+						if (groupName) {
+							const requiredSum = document.getElementById(`groupControls_${groupName}`).firstElementChild.valueAsNumber
+							const groupInfo = groupMap[groupName] ?? { requiredSum, sum: 0, requiredCount: groups[groupName].length, count: 0, cellIndex }
+							groupInfo.sum += cellValue
+
+							if (cellValue) {
+								++groupInfo.count
+							}
+
+							groupMap[groupName] = groupInfo
+							sharedGroups[cellIndex] = groupInfo
+
+							if (groupInfo.requiredCount > groupInfo.requiredSum) {
+								alert(`The required count ${groupInfo.requiredCount} exceeds ${groupInfo.requiredSum} when checking cell [${j + 1}, ${i + 1}]`)
+								return
+							}
+
+							if (groupInfo.requiredSum < groupInfo.sum) {
+								alert(`The sum ${groupInfo.sum} exceeds ${groupInfo.requiredSum} when checking cell [${j + 1}, ${i + 1}] (${cellValue})`)
+								return
+							}
+
+							if (groupInfo.requiredCount === groupInfo.count && groupInfo.requiredSum !== groupInfo.sum) {
+								alert(`The sum ${groupInfo.sum} doesn't match with ${groupInfo.requiredSum} when checking cell [${j + 1}, ${i + 1}] (${cellValue})`)
+								return
+							}
+
+							if (!cellValue) {
+								emptyCellCoordinates.push({
+									cellIndex,
+									rowIndex,
+									colIndex,
+									blockIndex,
+									groupInfo,
+								})
+							}
+						} else {
+							if (!cellValue) {
+								emptyCellCoordinates.push({
+									cellIndex,
+									rowIndex,
+									colIndex,
+									blockIndex,
+									groupInfo: null,
+								})
+							}
+						}
+
+					}
+				}
+			}
+
+			var calls = 0
+
+			function solveRecursively(coordinateIndex, maskBitmaps, cells, emptyCellDatas) {
+				if (++calls > 200000000) {
+					throw 'timeout'
+				}
+
+				if (coordinateIndex >= emptyCellDatas.length) {
+					throw 'solved'
+				}
+
+				const {
+					cellIndex,
+					rowIndex,
+					colIndex,
+					blockIndex,
+					groupInfo
+				} = emptyCellDatas[coordinateIndex]
+
+				if (groupInfo) {
+					++groupInfo.count
+				}
+
+				const rowBitmap = maskBitmaps[rowIndex]
+				const colBitmap = maskBitmaps[colIndex]
+				const blockBitmap = maskBitmaps[blockIndex]
+				const oldSum = groupInfo?.sum ?? 0
+				const count = groupInfo?.count
+				const requiredCount = groupInfo?.requiredCount
+				const requiredSum = groupInfo?.requiredSum
+
+				for (let val = 1; val <= 9; ++val) {
+					const maskValue = 1 << (val - 1)
+					const newSum = oldSum + val
+
+					if (maskValue & rowBitmap) {
+						continue
+					}
+
+					if (maskValue & colBitmap) {
+						continue
+					}
+
+					if (maskValue & blockBitmap) {
+						continue
+					}
+
+					if (groupInfo) {
+						if (requiredSum < newSum || count === requiredCount && requiredSum !== newSum) {
+							continue
+						}
+
+						groupInfo.sum = newSum
+					}
+
+					maskBitmaps[rowIndex] = maskValue | rowBitmap
+					maskBitmaps[colIndex] = maskValue | colBitmap
+					maskBitmaps[blockIndex] = maskValue | blockBitmap
+					cells[cellIndex] = val
+
+					solveRecursively(coordinateIndex + 1, maskBitmaps, cells, emptyCellDatas)
+				}
+
+				if (groupInfo) {
+					--groupInfo.count
+					groupInfo.sum = oldSum
+				}
+
+				maskBitmaps[rowIndex] = rowBitmap
+				maskBitmaps[colIndex] = colBitmap
+				maskBitmaps[blockIndex] = blockBitmap
+				cells[cellIndex] = 0
+			}
+
+			try {
+				const rowsWithGroups = new Set(emptyCellCoordinates.filter(x => x.groupInfo).map(x => x.rowIndex))
+				const firstHalf = [...rowsWithGroups].filter(x => x <= 4).length >= [...rowsWithGroups].filter(x => x >= 4).length
+
+				emptyCellCoordinates.sort((a, b) => {
+					const gA = a.groupInfo
+					const gB = b.groupInfo
+
+					const countA = gA?.requiredCount - gA?.count
+					const countB = gB?.requiredCount - gB?.count
+
+					if (countA === 1 && countB === 1) {
+						return 0
+					}
+
+					if (countA === 1 && countB !== 1) {
+						return -1
+					}
+
+					if (countA !== 1 && countB === 1) {
+						return 1
+					}
+
+					const iA = gA?.cellIndex ?? a.cellIndex
+					const iB = gB?.cellIndex ?? b.cellIndex
+
+					const diff = firstHalf ? iA - iB : iB - iA
+
+					if (diff === 0) {
+						return firstHalf ? a.cellIndex - b.cellIndex : b.cellIndex - a.cellIndex
+					}
+
+					return diff
+				})
+
+				console.log(emptyCellCoordinates)
+				solveRecursively(0, bitmaps, cellValues, emptyCellCoordinates)
+				alert('No solution found')
+			} catch (e) {
+				if (e === 'solved') {
+					console.log(`${calls} calls`)
+
+					for (let i = 0; i < 9; ++i) {
+						for (let j = 0; j < 9; ++j) {
+							inputs[i][j].firstElementChild.valueAsNumber = cellValues[9 * i + j]
+						}
+					}
+				} else {
+					if (e === 'timeout') {
+						alert('Ran out of solutions')
+					}
+					console.error(e)
+				}
+			}
+
+		}
+
+		function clearAll() {
+			for (const key in groups) {
+				delete groups[key]
+			}
+
+			document.getElementById('groups').innerHTML = ''
+			document.querySelectorAll('.box').forEach(el => {
+				el.className = 'box'
+				el.firstElementChild.value = ''
+				delete el.dataset.count
+			})
+		}
+
+	</script>
+	<br>
+	<br>
+	You can add cells to group by holding Shift key and focus (or navigate with arrows) the cells you want to add to group
+	<br>
+	<br>
+	<div>
+		<button onclick="solve()">Solve</button>
+		<button onclick="startAddingToGroup()" id="startGroupBtn">Start adding to group</button>
+		<button style="display: none" onclick="stopAddingToGroup()" id="stopGroupBtn">Stop adding to group</button>
+		<button onclick="clearAll()">Clear all</button>
+	</div>
+	<div id="groups">
+
+	</div>
+</body>
+
+</html>
