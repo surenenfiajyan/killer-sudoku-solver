@@ -489,6 +489,14 @@
 						return 1
 					}
 
+					if (gA && !gB) {
+						return -1
+					}
+
+					if (gB && gA) {
+						return 1
+					}
+
 					const iA = gA?.cellIndex ?? a.cellIndex
 					const iB = gB?.cellIndex ?? b.cellIndex
 
