@@ -58,6 +58,7 @@
 		const colors = {}
 		const groups = {}
 		const inputs = [[], [], [], [], [], [], [], [], []]
+		let worker = null
 
 		window.addEventListener('keydown', ev => {
 			if (ev.key === 'Shift') {
@@ -74,6 +75,8 @@
 		let newGroup = ''
 
 		function startAddingToGroup(target = null) {
+			worker?.terminate()
+			worker = null
 			document.getElementById('startGroupBtn').style.display = 'none'
 			document.getElementById('stopGroupBtn').style.display = ''
 
@@ -92,6 +95,8 @@
 		}
 
 		function stopAddingToGroup() {
+			worker?.terminate()
+			worker = null
 			document.getElementById('startGroupBtn').style.display = ''
 			document.getElementById('stopGroupBtn').style.display = 'none'
 			document.getElementById(`groupControls_${newGroup}`)?.firstElementChild?.focus()
@@ -99,6 +104,8 @@
 		}
 
 		function addToGroup(box, name) {
+			worker?.terminate()
+			worker = null
 			box = box.closest('.box')
 			for (const c of [...box.classList]) {
 				if (c !== name && c !== 'box') {
@@ -152,6 +159,8 @@
 		}
 
 		function removeFromGroup(box, name) {
+			worker?.terminate()
+			worker = null
 			box = box.closest('.box')
 			box.classList.remove(name)
 			const index = groups[name]?.indexOf(box) ?? -1
@@ -170,6 +179,8 @@
 		}
 
 		function updateCountLabel(name) {
+			worker?.terminate()
+			worker = null
 			document.querySelectorAll(`.box`).forEach(el => {
 				if (el.classList.length === 1 || el.classList.contains(name)) {
 					delete el.dataset.count
@@ -272,6 +283,9 @@
 		document.querySelector('style').innerText += style
 
 		function solve() {
+			worker?.terminate();
+			worker = new Worker('solver.js');
+
 			const bitmaps = [
 				0, 0, 0, 0, 0, 0, 0, 0, 0,
 				0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -393,146 +407,81 @@
 				}
 			}
 
-			var calls = 0
+			const rowsWithGroups = new Set(emptyCellCoordinates.filter(x => x.groupInfo).map(x => x.rowIndex))
+			const firstHalf = [...rowsWithGroups].filter(x => x <= 4).length >= [...rowsWithGroups].filter(x => x >= 4).length
 
-			function solveRecursively(coordinateIndex, maskBitmaps, cells, emptyCellDatas) {
-				if (++calls > 200000000) {
-					throw 'timeout'
+			emptyCellCoordinates.sort((a, b) => {
+				const gA = a.groupInfo
+				const gB = b.groupInfo
+
+				const countA = gA?.requiredCount - gA?.count
+				const countB = gB?.requiredCount - gB?.count
+
+				if (countA === 1 && countB === 1) {
+					return 0
 				}
 
-				if (coordinateIndex >= emptyCellDatas.length) {
-					throw 'solved'
+				if (countA === 1 && countB !== 1) {
+					return -1
 				}
 
-				const {
-					cellIndex,
-					rowIndex,
-					colIndex,
-					blockIndex,
-					groupInfo
-				} = emptyCellDatas[coordinateIndex]
-
-				if (groupInfo) {
-					++groupInfo.count
+				if (countA !== 1 && countB === 1) {
+					return 1
 				}
 
-				const rowBitmap = maskBitmaps[rowIndex]
-				const colBitmap = maskBitmaps[colIndex]
-				const blockBitmap = maskBitmaps[blockIndex]
-				const oldSum = groupInfo?.sum ?? 0
-				const count = groupInfo?.count
-				const requiredCount = groupInfo?.requiredCount
-				const requiredSum = groupInfo?.requiredSum
-
-				for (let val = 1; val <= 9; ++val) {
-					const maskValue = 1 << (val - 1)
-					const newSum = oldSum + val
-
-					if (maskValue & rowBitmap) {
-						continue
-					}
-
-					if (maskValue & colBitmap) {
-						continue
-					}
-
-					if (maskValue & blockBitmap) {
-						continue
-					}
-
-					if (groupInfo) {
-						if (requiredSum < newSum || count === requiredCount && requiredSum !== newSum) {
-							continue
-						}
-
-						groupInfo.sum = newSum
-					}
-
-					maskBitmaps[rowIndex] = maskValue | rowBitmap
-					maskBitmaps[colIndex] = maskValue | colBitmap
-					maskBitmaps[blockIndex] = maskValue | blockBitmap
-					cells[cellIndex] = val
-
-					solveRecursively(coordinateIndex + 1, maskBitmaps, cells, emptyCellDatas)
+				if (gA && !gB) {
+					return -1
 				}
 
-				if (groupInfo) {
-					--groupInfo.count
-					groupInfo.sum = oldSum
+				if (gB && !gA) {
+					return 1
 				}
 
-				maskBitmaps[rowIndex] = rowBitmap
-				maskBitmaps[colIndex] = colBitmap
-				maskBitmaps[blockIndex] = blockBitmap
-				cells[cellIndex] = 0
-			}
+				const iA = gA?.cellIndex ?? a.cellIndex
+				const iB = gB?.cellIndex ?? b.cellIndex
 
-			try {
-				const rowsWithGroups = new Set(emptyCellCoordinates.filter(x => x.groupInfo).map(x => x.rowIndex))
-				const firstHalf = [...rowsWithGroups].filter(x => x <= 4).length >= [...rowsWithGroups].filter(x => x >= 4).length
+				const diff = firstHalf ? iA - iB : iB - iA
 
-				emptyCellCoordinates.sort((a, b) => {
-					const gA = a.groupInfo
-					const gB = b.groupInfo
+				if (diff === 0) {
+					return firstHalf ? a.cellIndex - b.cellIndex : b.cellIndex - a.cellIndex
+				}
 
-					const countA = gA?.requiredCount - gA?.count
-					const countB = gB?.requiredCount - gB?.count
+				return diff
+			})
 
-					if (countA === 1 && countB === 1) {
-						return 0
-					}
+			console.log(emptyCellCoordinates)
+			worker.postMessage({ coordinateIndex: 0, maskBitmaps: bitmaps, cells: cellValues, emptyCellDatas: emptyCellCoordinates })
 
-					if (countA === 1 && countB !== 1) {
-						return -1
-					}
+			worker.onmessage = msg => {
+				worker?.terminate()
+				worker = null
 
-					if (countA !== 1 && countB === 1) {
-						return 1
-					}
+				const { cells, message, calls } = msg.data
 
-					if (gA && !gB) {
-						return -1
-					}
-
-					if (gB && !gA) {
-						return 1
-					}
-
-					const iA = gA?.cellIndex ?? a.cellIndex
-					const iB = gB?.cellIndex ?? b.cellIndex
-
-					const diff = firstHalf ? iA - iB : iB - iA
-
-					if (diff === 0) {
-						return firstHalf ? a.cellIndex - b.cellIndex : b.cellIndex - a.cellIndex
-					}
-
-					return diff
-				})
-
-				console.log(emptyCellCoordinates)
-				solveRecursively(0, bitmaps, cellValues, emptyCellCoordinates)
-				alert('No solution found')
-			} catch (e) {
-				if (e === 'solved') {
+				if (message === 'unsolvable') {
+					alert('No solution found')
+				} else if (message === 'solved') {
 					console.log(`${calls} calls`)
 
 					for (let i = 0; i < 9; ++i) {
 						for (let j = 0; j < 9; ++j) {
-							inputs[i][j].firstElementChild.valueAsNumber = cellValues[9 * i + j]
+							inputs[i][j].firstElementChild.valueAsNumber = cells[9 * i + j]
 						}
 					}
 				} else {
-					if (e === 'timeout') {
+					if (message === 'timeout') {
 						alert('Ran out of solutions')
 					}
+
 					console.error(e)
 				}
 			}
-
 		}
 
 		function clearAll() {
+			worker?.terminate()
+			worker = null
+
 			for (const key in groups) {
 				delete groups[key]
 			}
@@ -548,7 +497,8 @@
 	</script>
 	<br>
 	<br>
-	You can add cells to group by holding Shift key and focus (or navigate with arrows) the cells you want to add to group
+	You can add cells to group by holding Shift key and focus (or navigate with arrows) the cells you want to add to
+	group
 	<br>
 	<br>
 	<div>
