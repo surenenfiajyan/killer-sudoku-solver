@@ -14,7 +14,8 @@ function solveRecursively(coordinateIndex, maskBitmaps, cells, emptyCellDatas) {
 		rowIndex,
 		colIndex,
 		blockIndex,
-		groupInfo
+		groupInfo,
+		random,
 	} = emptyCellDatas[coordinateIndex]
 
 	if (groupInfo) {
@@ -28,8 +29,10 @@ function solveRecursively(coordinateIndex, maskBitmaps, cells, emptyCellDatas) {
 	const count = groupInfo?.count
 	const requiredCount = groupInfo?.requiredCount
 	const requiredSum = groupInfo?.requiredSum
+	const randomNumbers = random ? [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5).sort(() => Math.random() - 0.5) : null
 
-	for (let val = 1; val <= 9; ++val) {
+	for (let i = 1; i <= 9; ++i) {
+		const val = random ? randomNumbers[i - 1] : i
 		const maskValue = 1 << (val - 1)
 		const newSum = oldSum + val
 

@@ -40,6 +40,7 @@
 			max-width: 60px;
 			aspect-ratio: 1;
 			display: inline-block;
+			background: white;
 
 			&[data-count]::before {
 				position: absolute;
@@ -200,7 +201,7 @@
 		}
 
 		let style = '';
-		document.body.insertAdjacentHTML('afterbegin', `<br>${'<div class="box"><input step="1" min="1" max="9" type="number"></div>'.repeat(9)}`.repeat(9))
+		document.body.insertAdjacentHTML('afterbegin', `<br class="box-br">${'<div class="box"><input step="1" min="1" max="9" type="number"></div>'.repeat(9)}`.repeat(9))
 		style += `.box:nth-of-type(3n + 1) input {border-left-width: 5px}`
 		style += `.box:nth-of-type(3n + 3) input {border-right-width: 5px}`
 
@@ -280,9 +281,9 @@
 			}
 		});
 
-		document.querySelector('style').innerText += style
+		document.querySelector('style').innerHTML += style
 
-		function solve() {
+		function solve(generate = false) {
 			worker?.terminate();
 			worker = new Worker('solver.js');
 
@@ -389,6 +390,7 @@
 									colIndex,
 									blockIndex,
 									groupInfo,
+									random: generate,
 								})
 							}
 						} else {
@@ -399,6 +401,7 @@
 									colIndex,
 									blockIndex,
 									groupInfo: null,
+									random: generate,
 								})
 							}
 						}
@@ -463,9 +466,71 @@
 				} else if (message === 'solved') {
 					console.log(`${calls} calls`)
 
-					for (let i = 0; i < 9; ++i) {
-						for (let j = 0; j < 9; ++j) {
-							inputs[i][j].firstElementChild.valueAsNumber = cells[9 * i + j]
+					if (generate) {
+						const inputsInGroup = new WeakSet();
+
+						for (let i = 0; i < 9; ++i) {
+							for (let j = 0; j < 9; ++j) {
+								const input = inputs[i][j].firstElementChild;
+
+								if (Math.random() < 0.1) {
+									input.valueAsNumber = cells[9 * i + j]
+								}
+
+								if (inputsInGroup.has(input)) {
+									continue
+								}
+
+								startAddingToGroup()
+
+								let queue = [{ i, j }]
+
+								let sum = 0
+								const max = 1 + Math.floor(Math.random() * 7)
+
+								outerLoop:
+								while (queue.length) {
+									for (const coords of queue) {
+										const el = inputs[coords.i][coords.j].firstElementChild
+										addToGroup(el, newGroup)
+										inputsInGroup.add(el)
+										sum += cells[9 * coords.i + coords.j]
+
+
+										if (groups[newGroup].length >= max) {
+											break outerLoop
+										}
+									}
+
+									const addedInQueue = new WeakSet();
+
+									queue = queue.flatMap(coords => [
+										{ i: coords.i + 1, j: coords.j, },
+										{ i: coords.i - 1, j: coords.j, },
+										{ i: coords.i, j: coords.j - 1, },
+										{ i: coords.i, j: coords.j + 1, },
+									].filter(x => {
+										const el = inputs[x.i]?.[x.j]?.firstElementChild
+
+										if (x.i >= 0 && x.i < 9 && x.j >= 0 && x.j < 9 && !inputsInGroup.has(el) && !addedInQueue.has(el)) {
+											addedInQueue.add(el)
+											return true
+										}
+
+										return false
+									})).sort(() => Math.random() - 0.5)
+								}
+
+								document.getElementById(`groupControls_${newGroup}`).firstElementChild.valueAsNumber = sum
+								updateCountLabel(newGroup)
+								stopAddingToGroup()
+							}
+						}
+					} else {
+						for (let i = 0; i < 9; ++i) {
+							for (let j = 0; j < 9; ++j) {
+								inputs[i][j].firstElementChild.valueAsNumber = cells[9 * i + j]
+							}
 						}
 					}
 				} else {
@@ -494,6 +559,57 @@
 			})
 		}
 
+		function generate() {
+			clearAll()
+			solve(true)
+		}
+
+		function save() {
+			const size = 600
+
+			const svg = `
+	<svg style="position: fixed; top: 0; left: 0;" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+	<foreignObject width="100%" height="100%">
+    <div xmlns="http://www.w3.org/1999/xhtml">${[...document.documentElement.querySelectorAll('style, .box, .box-br')].map(x => {
+				if (x.classList.contains('box')) {
+					const input = x.querySelector('input')
+					input.setAttribute('value', input.value)
+				}
+
+				return x.outerHTML
+			}).join('')}</div>
+	</foreignObject>
+</svg>`
+
+			const svgContainer = document.createElement('div')
+			svgContainer.insertAdjacentHTML('beforeend', svg)
+
+
+			const svgBlob = new Blob([new XMLSerializer().serializeToString(svgContainer.querySelector('svg'))], { type: 'image/svg+xml;charset=utf-8' })
+
+			const reader = new FileReader()
+
+			reader.onload = (e) => {
+				const tempImg = new Image()
+
+				const canvas = document.createElement('canvas')
+				canvas.width = canvas.height = size
+				const ctx = canvas.getContext('2d')
+
+				tempImg.onload = () => {
+					ctx.drawImage(tempImg, 30, 15, size, size)
+					const link = document.createElement('a')
+					link.href = canvas.toDataURL('image/png')
+					link.download = 'save.png'
+					link.click()
+				}
+
+				tempImg.src = e.target.result
+			}
+
+			reader.readAsDataURL(svgBlob)
+		}
+
 	</script>
 	<br>
 	<br>
@@ -505,6 +621,8 @@
 		<button onclick="solve()">Solve</button>
 		<button onclick="startAddingToGroup()" id="startGroupBtn">Start adding to group</button>
 		<button style="display: none" onclick="stopAddingToGroup()" id="stopGroupBtn">Stop adding to group</button>
+		<button onclick="generate()">Generate</button>
+		<button onclick="save()">Save</button>
 		<button onclick="clearAll()">Clear all</button>
 	</div>
 	<div id="groups">
