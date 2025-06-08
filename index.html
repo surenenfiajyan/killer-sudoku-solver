@@ -65,6 +65,10 @@
 			if (ev.key === 'Shift') {
 				startAddingToGroup(ev.target)
 			}
+
+			if (!document.activeElement?.closest('input') && ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(ev.key)) {
+				document.querySelector('.box input').focus();
+			}
 		})
 
 		window.addEventListener('keyup', ev => {
@@ -133,6 +137,12 @@
 					}
 
 					groups[name][0].dataset.count = ev.target.valueAsNumber
+				}
+
+				controls.firstElementChild.onkeydown = ev => {
+					if (ev.key === 'Enter') {
+						groups[name][0].querySelector('input').focus();
+					}
 				}
 
 				controls.lastElementChild.onclick = ev => {
