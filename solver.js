@@ -1,5 +1,16 @@
 let calls = 0
 
+function getShuffledNumbers() {
+	const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+
+	for (let i = numbers.length - 1; i > 0; --i) {
+		const r = Math.floor(Math.random() * (i + 1));
+		[numbers[i], numbers[r]] = [numbers[r], numbers[i]];
+	}
+
+	return numbers;
+}
+
 function solveRecursively(coordinateIndex, maskBitmaps, cells, emptyCellDatas) {
 	if (++calls > 20000000000) {
 		throw 'timeout'
@@ -29,7 +40,7 @@ function solveRecursively(coordinateIndex, maskBitmaps, cells, emptyCellDatas) {
 	const count = groupInfo?.count
 	const requiredCount = groupInfo?.requiredCount
 	const requiredSum = groupInfo?.requiredSum
-	const randomNumbers = random ? [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5).sort(() => Math.random() - 0.5) : null
+	const randomNumbers = random ? getShuffledNumbers() : null
 
 	for (let i = 1; i <= 9; ++i) {
 		const val = random ? randomNumbers[i - 1] : i
